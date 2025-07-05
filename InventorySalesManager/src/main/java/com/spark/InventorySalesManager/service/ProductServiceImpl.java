@@ -39,10 +39,12 @@ public class ProductServiceImpl implements ProductService{
 
     @Override
     public PagedProductResponse<ProductDto> getAllProducts(Pageable pageable) {
+        log.info("Fetching all products with pagination: page={}, size={}", pageable.getPageNumber(), pageable.getPageSize());
         Page<Product> productPage = productRepository.findAll(pageable);
         List<ProductDto> productDtos = productPage
                 .map(productMapper::toDto)
                 .getContent();
+        log.debug("Fetched {} products", productDtos.size());
         return new PagedProductResponse<>(
                 productDtos,
                 productPage.getTotalPages(),
@@ -54,6 +56,7 @@ public class ProductServiceImpl implements ProductService{
 
     @Override
     public ProductDto getProductById(Long id) {
+        log.info("Fetching product by ID: {}", id);
         Product product = productRepository.findById(id).orElseThrow(
                 ()-> new ProductServiceCustomException(ProductErrorCode.PRODUCT_NOT_FOUND));
         return  productMapper.toDto(product);
@@ -62,8 +65,8 @@ public class ProductServiceImpl implements ProductService{
     @Override
     @Transactional
     public ProductResponseDto addProduct(ProductDto product) {
+        log.info("Adding new product: {}", product.getName());
         try {
-            // Map DTO to entity
             Product productData = productMapper.toEntity(product);
 
             if (product.getSales() != null) {
@@ -72,8 +75,10 @@ public class ProductServiceImpl implements ProductService{
                 }
             }
             Product savedProduct = productRepository.save(productData);
+            log.info("Product added successfully with ID: {}", savedProduct.getId());
             return productMapper.toResponseDto(savedProduct);
         } catch (Exception e) {
+            log.error("Failed to add product: {}", e.getMessage(), e);
             throw new ProductServiceCustomException(ProductErrorCode.PRODUCT_SAVE_FAILED);
         }
     }
@@ -81,7 +86,9 @@ public class ProductServiceImpl implements ProductService{
     @Override
     @Transactional
     public boolean updateProduct(Long id, ProductDto product) {
+        log.info("Updating product with ID: {}", id);
         if (!productRepository.existsById(id)) {
+            log.warn("Product not found for update with ID: {}", id);
             throw new ProductServiceCustomException(ProductErrorCode.PRODUCT_NOT_FOUND);
         }
         try {
@@ -93,8 +100,10 @@ public class ProductServiceImpl implements ProductService{
                 }
             }
             productRepository.save(productData);
+            log.info("Product updated successfully with ID: {}", id);
             return true;
         } catch (Exception e) {
+            log.error("Failed to update product with ID: {}", id, e);
             throw new ProductServiceCustomException(ProductErrorCode.PRODUCT_UPDATE_FAILED);
         }
     }
@@ -102,19 +111,24 @@ public class ProductServiceImpl implements ProductService{
     @Override
     @Transactional
     public boolean deleteProduct(Long id) {
+        log.info("Deleting product with ID: {}", id);
         if (!productRepository.existsById(id)) {
+            log.warn("Product not found for deletion with ID: {}", id);
             throw new ProductServiceCustomException(ProductErrorCode.PRODUCT_NOT_FOUND);
         }
         try {
             productRepository.deleteById(id);
+            log.info("Product deleted successfully with ID: {}", id);
             return true;
         } catch (Exception e) {
+            log.error("Failed to delete product with ID: {}", id, e);
             throw new ProductServiceCustomException(ProductErrorCode.PRODUCT_DELETE_FAILED);
         }
     }
 
     @Override
     public double getTotalRevenue() {
+        log.info("Calculating total revenue");
         List<Product> products = productRepository.findAll();
         double totalRevenue = 0.0;
         for (Product product : products) {
@@ -122,11 +136,13 @@ public class ProductServiceImpl implements ProductService{
                 totalRevenue += sale.getQuantity() * product.getPrice();
             }
         }
+        log.info("Total revenue calculated: {}", totalRevenue);
         return totalRevenue;
     }
 
     @Override
     public double getRevenueByProduct(Long productId) {
+        log.info("Calculating revenue for product ID: {}", productId);
         ProductDto product = getProductById(productId);
         if (product == null) return 0.0;
         return product.getSales().stream()
@@ -136,14 +152,17 @@ public class ProductServiceImpl implements ProductService{
 
     @Override
     public byte[] generateProductsPdf() {
+        log.info("Generating PDF report for products");
         List<Product> product = productRepository.findAll();
         if (CollectionUtils.isEmpty(product)) {
+            log.warn("No products available to generate PDF");
             return new byte[0];
         }
        return generateProductsPdf(product);
     }
 
     public byte[] generateProductsPdf(List<Product> products) throws DocumentException {
+        log.debug("Creating PDF document for {} products", products.size());
         Document document = new Document(PageSize.A4);
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PdfWriter.getInstance(document, baos);
